@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>AI 회화 친구</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* 레이아웃: 세로 휴대폰 화면. 위 얼굴, 가운데 말풍선, 아래 큰 마이크 */
+:root{
+  --bg:#E8F0F2; --surface:#FFFFFF; --ink:#13262C; --muted:#586E76; --line:#CBDADF;
+  --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#D6EEF0;
+  --me:#FFE49A; --me-ink:#2C2406; --rec:#E4572E;
+  --face:#FFD9A8; --cheek:#F7A58B; --hp:#0E7C86;
+  --font-display:'Jua','Noto Sans KR',system-ui,sans-serif;
+  --font-body:'Noto Sans KR',system-ui,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0D1A1E; --surface:#16272D; --ink:#E3EFF1; --muted:#8FA7AE; --line:#28414A;
+    --accent:#4CC3CC; --accent-ink:#06262A; --accent-soft:#1E4349;
+    --me:#5C4A10; --me-ink:#FFF0C2; --rec:#FF7A52;
+    --face:#F2C58F; --cheek:#E58C74; --hp:#4CC3CC;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--font-body);-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#app{height:100%;height:100dvh;max-width:520px;margin:0 auto;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 16px env(safe-area-inset-bottom,0px);position:relative}
+
+header{display:flex;align-items:center;gap:8px;padding-block:10px 4px}
+.ttl{flex:1;min-width:0}
+.ttl-name{font-family:var(--font-display);font-size:1.35rem;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ttl-sub{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:.85rem;min-height:36px;font-variant-numeric:tabular-nums}
+.icon-btn{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;flex:none}
+.icon-btn svg,.mic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+.stage{display:flex;flex-direction:column;align-items:center;gap:2px;padding-block:2px 4px}
+.face{width:104px;height:104px;overflow:visible}
+.face .eye{transform-box:fill-box;transform-origin:center;animation:blink 5s infinite}
+.face .eyes{transition:transform .25s}
+.face.thinking .eyes{transform:translateY(-4px)}
+.face #open{display:none;transform-box:fill-box;transform-origin:center}
+.face.talking #smile{display:none}
+.face.talking #open{display:block;animation:talk .38s ease-in-out infinite}
+.face .ring{opacity:0}
+.face.listening .ring{animation:ring 1.2s ease-out infinite}
+@keyframes blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)}}
+@keyframes talk{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1.2)}}
+@keyframes ring{0%{opacity:.8;transform:scale(.92)}100%{opacity:0;transform:scale(1.12)}}
+.face .ring{transform-box:fill-box;transform-origin:center}
+#status{min-height:1.6em;font-size:.9rem;color:var(--muted);text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+#log{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-block:8px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.msg{max-width:90%;display:flex;flex-direction:column;min-width:0}
+.msg.ai{align-self:flex-start}
+.msg.me{align-self:flex-end}
+.bubble{background:var(--surface);border:1px solid var(--line);border-radius:18px 18px 18px 6px;padding:12px 14px;overflow-wrap:anywhere}
+.me .bubble{background:var(--me);color:var(--me-ink);border-color:transparent;border-radius:18px 18px 6px 18px}
+.say{margin:0;font-size:1.2rem;font-weight:500;line-height:1.45}
+.ko{margin:6px 0 0;font-size:.85rem;color:var(--muted)}
+.rep{margin-top:10px;padding:8px 10px;border-radius:12px;background:var(--accent-soft)}
+.rep-label{display:block;font-size:.72rem;letter-spacing:.06em;color:var(--accent);font-weight:700}
+.rep-text{margin:2px 0 0;font-size:1.15rem;font-weight:500}
+.veiled .say,.veiled .rep-text,.veiled .ko,.veiled .rc{filter:blur(9px);user-select:none;opacity:.55}
+.veiled .bubble{cursor:pointer}
+.replay{align-self:flex-start;margin-top:4px;border:1px solid var(--line);background:var(--surface);border-radius:999px;min-height:36px;padding:4px 12px;font-size:.8rem;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.replay svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.recap{margin:10px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.recap li{display:flex;align-items:center;gap:8px;background:var(--accent-soft);border-radius:12px;padding:6px 6px 6px 12px}
+.recap .rc{flex:1;min-width:0;font-size:1.05rem}
+.recap .replay{margin:0;flex:none}
+.write{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+textarea,input[type=text],input[type=number],input[type=password],select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:16px}
+.btn{border:0;border-radius:12px;background:var(--accent);color:var(--accent-ink);font-weight:700;padding:12px 18px;min-height:46px}
+.btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:500}
+.btn.small{min-height:40px;padding:8px 14px}
+.msg.notice .bubble{background:transparent;border:1px dashed var(--line);color:var(--muted);font-size:.9rem}
+
+#textRow{display:flex;gap:8px;padding-block:6px}
+#textRow input{flex:1}
+.dock{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding-block:8px 14px;gap:8px}
+.chip{justify-self:start;border:1px solid var(--line);background:var(--surface);border-radius:999px;min-height:44px;padding:6px 14px;font-size:.85rem;line-height:1.2;max-width:100%}
+.dock .icon-btn{justify-self:end}
+.mic{width:80px;height:80px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.mic svg{width:34px;height:34px}
+.mic:disabled{opacity:.4;cursor:not-allowed}
+.mic.rec{background:var(--rec);color:#fff;animation:pulse 1.2s ease-out infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--rec) 55%,transparent)}100%{box-shadow:0 0 0 24px transparent}}
+
+#toast{position:absolute;left:16px;right:16px;bottom:110px;z-index:8;background:var(--ink);color:var(--bg);border-radius:12px;padding:12px 14px;font-size:.9rem;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+
+.overlay{position:absolute;inset:0;z-index:6;display:flex;align-items:flex-end;padding:16px 0;background:linear-gradient(to bottom,transparent 15%,var(--bg) 52%)}
+.card{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:12px}
+.card h1{margin:0;font-family:var(--font-display);font-weight:400;font-size:1.6rem;line-height:1.25}
+.card p{margin:0;color:var(--muted);font-size:.92rem}
+.card .row2{display:flex;gap:8px}
+.card .row2 .btn{flex:1}
+
+.sheet{position:fixed;inset:0;z-index:20;background:var(--bg);overflow-y:auto;overscroll-behavior:contain}
+.sheet-in{max-width:520px;margin:0 auto;padding:env(safe-area-inset-top,0px) 16px calc(env(safe-area-inset-bottom,0px) + 32px)}
+.sheet-top{position:sticky;top:0;background:var(--bg);display:flex;align-items:center;justify-content:space-between;padding-block:12px;z-index:2}
+.sheet-top h2{margin:0;font-family:var(--font-display);font-weight:400;font-size:1.4rem}
+fieldset{border:0;margin:0 0 18px;padding:0;display:flex;flex-direction:column;gap:12px;min-width:0}
+legend{font-size:.78rem;letter-spacing:.08em;color:var(--accent);font-weight:700;padding:0;margin-bottom:8px}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld>span,.fld>.lbl{font-size:.85rem;color:var(--muted)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface)}
+.seg label{flex:1;position:relative}
+.seg input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.seg span{display:block;text-align:center;padding:10px 6px;font-size:.95rem}
+.seg input:checked+span{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.seg input:focus-visible+span{box-shadow:inset 0 0 0 3px var(--ink)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px}
+.sw{appearance:none;-webkit-appearance:none;width:46px;height:28px;border-radius:14px;background:var(--line);position:relative;border:0;flex:none;cursor:pointer}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:transform .15s}
+.sw:checked{background:var(--accent)}
+.sw:checked::after{transform:translateX(18px)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.note{font-size:.82rem;color:var(--muted);margin:0}
+.help{margin:0;padding-left:1.1em;font-size:.88rem;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="ttl">
+      <div class="ttl-name" id="ttlName">Emma</div>
+      <div class="ttl-sub" id="ttlSub">영어 연습을 돕는 AI 친구</div>
+    </div>
+    <button class="pill" id="endBtn" type="button" hidden>마치기</button>
+    <div class="pill" id="timer" aria-label="남은 시간">15:00</div>
+    <button class="icon-btn" id="gearBtn" type="button" aria-label="설정">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <section class="stage">
+    <svg class="face idle" id="face" viewBox="0 0 120 120" role="img" aria-label="AI 친구 얼굴">
+      <circle class="ring" cx="60" cy="66" r="44" fill="none" stroke="var(--accent)" stroke-width="3"/>
+      <rect x="13" y="52" width="13" height="28" rx="6.5" fill="var(--hp)"/>
+      <rect x="94" y="52" width="13" height="28" rx="6.5" fill="var(--hp)"/>
+      <circle cx="60" cy="66" r="35" fill="var(--face)"/>
+      <path d="M22 62 A38 38 0 0 1 98 62" fill="none" stroke="var(--hp)" stroke-width="6" stroke-linecap="round"/>
+      <path d="M52 34 Q60 24 68 34" fill="none" stroke="#7A4B2A" stroke-width="4" stroke-linecap="round"/>
+      <g class="eyes" fill="#1A2B30">
+        <ellipse class="eye" cx="47" cy="64" rx="4" ry="5.5"/>
+        <ellipse class="eye" cx="73" cy="64" rx="4" ry="5.5"/>
+      </g>
+      <ellipse cx="38" cy="76" rx="6" ry="4" fill="var(--cheek)" opacity=".6"/>
+      <ellipse cx="82" cy="76" rx="6" ry="4" fill="var(--cheek)" opacity=".6"/>
+      <path id="smile" d="M51 78 Q60 87 69 78" fill="none" stroke="#1A2B30" stroke-width="3" stroke-linecap="round"/>
+      <ellipse id="open" cx="60" cy="81" rx="7" ry="5.5" fill="#7A2E2A"/>
+    </svg>
+    <div id="status" aria-live="polite"></div>
+  </section>
+
+  <main id="log" aria-label="대화"></main>
+
+  <form id="textRow" hidden>
+    <input type="text" id="textIn" placeholder="글자로 입력" aria-label="글자로 입력" autocomplete="off">
+    <button class="btn small" type="submit">보내기</button>
+  </form>
+
+  <footer class="dock">
+    <button class="chip" id="langBtn" type="button"></button>
+    <button class="mic" id="mic" type="button" aria-label="누르고 말하기" aria-pressed="false" disabled>
+      <svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <button class="icon-btn" id="kbBtn" type="button" aria-label="글자로 입력하기">
+      <svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+    </button>
+  </footer>
+
+  <div id="toast" role="alert" hidden></div>
+
+  <div class="overlay" id="intro">
+    <div class="card">
+      <h1 id="introTitle">안녕!</h1>
+      <p id="introSub"></p>
+      <p id="introKey"></p>
+      <div class="row2">
+        <button class="btn" id="startBtn" type="button">시작하기</button>
+        <button class="btn ghost" id="introSet" type="button">설정</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden role="dialog" aria-modal="true" aria-label="설정">
+  <div class="sheet-in">
+    <div class="sheet-top"><h2>설정</h2><button class="btn small" id="sheetClose" type="button">완료</button></div>
+
+    <fieldset>
+      <legend>내 사용설명서</legend>
+      <div class="fld"><span class="lbl">나는</span>
+        <div class="seg"><label><input type="radio" name="who" value="adult" data-k="who"><span>성인</span></label><label><input type="radio" name="who" value="child" data-k="who"><span>아이</span></label></div>
+      </div>
+      <div class="two">
+        <label class="fld"><span>나이(살)</span><input type="number" id="ageIn" data-k="age" min="3" max="99" inputmode="numeric"></label>
+        <label class="fld"><span>하루 시간 제한(분, 0은 제한 없음)</span><input type="number" id="minIn" data-k="minutes" min="0" max="180" inputmode="numeric"></label>
+      </div>
+      <label class="fld"><span>배울 언어</span>
+        <select id="langSel" data-k="lang"><option value="en">영어 (English)</option><option value="ja">일본어 (日本語)</option><option value="es">스페인어 (Español)</option><option value="zh">중국어 (中文)</option><option value="fr">프랑스어 (Français)</option><option value="de">독일어 (Deutsch)</option></select>
+      </label>
+      <label class="fld"><span>지금 수준</span>
+        <select id="levelSel" data-k="level"><option>완전 처음</option><option>단어 몇 개 앎</option><option>짧은 대화 됨</option><option>일상 대화 됨</option></select>
+      </label>
+      <label class="fld"><span>좋아하는 것 (예: 축구, 요리, 여행, 게임, 기차)</span><input type="text" data-k="likes" maxlength="80"></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>AI 친구</legend>
+      <div class="two">
+        <label class="fld"><span>이름</span><input type="text" data-k="fname" maxlength="20"></label>
+        <label class="fld"><span>성격</span><input type="text" data-k="persona" maxlength="30"></label>
+      </div>
+      <div class="fld"><span class="lbl">따라 말하기</span>
+        <div class="seg"><label><input type="radio" name="repeatAmt" value="적게" data-k="repeatAmt"><span>적게</span></label><label><input type="radio" name="repeatAmt" value="보통" data-k="repeatAmt"><span>보통</span></label><label><input type="radio" name="repeatAmt" value="많이" data-k="repeatAmt"><span>많이</span></label></div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>소리와 화면</legend>
+      <label class="fld"><span>말 속도 <output id="rateOut">0.88</output></span><input type="range" id="rateIn" data-k="rate" min="0.6" max="1.1" step="0.01"></label>
+      <label class="row"><span>한국어 뜻 보이기</span><input type="checkbox" class="sw" data-k="showKo"></label>
+      <label class="row"><span>소리 먼저, 글자는 뒤에</span><input type="checkbox" class="sw" data-k="soundFirst"></label>
+      <label class="row"><span>AI 말이 끝나면 마이크 자동으로 켜기</span><input type="checkbox" class="sw" data-k="autoListen"></label>
+      <label class="fld"><span>목소리</span><select id="voiceSel"></select></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>AI 연결</legend>
+      <label class="fld"><span>대화 AI</span>
+        <select id="provSel" data-k="provider"><option value="gemini">Gemini</option><option value="openai">OpenAI</option><option value="claude">Claude</option></select>
+      </label>
+      <label class="fld"><span>모델 이름 (바뀌었으면 직접 고쳐 쓰세요)</span><input type="text" id="modelIn" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+      <label class="fld"><span>API 키</span><input type="password" id="keyIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="비워 두면 연습 모드(영어 따라 말하기)"></label>
+      <p class="note">키는 이 기기에만 저장돼요. 남에게 주지 말고, 인터넷에 올리는 파일에 넣지 마세요. 결제 계정에 한 달 사용 한도를 꼭 걸어 두세요.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>기록과 도움말</legend>
+      <button class="btn ghost" id="clearBtn" type="button">대화 기록 지우기</button>
+      <ul class="help">
+        <li>AI가 말을 너무 길게 하면 대화 기록을 지우고 다시 시작해 보세요.</li>
+        <li>마이크가 안 되면 크롬(또는 엣지)에서 열고, 주소창 왼쪽 자물쇠에서 마이크를 허용하세요.</li>
+        <li>마이크는 길게 누르는 동안 듣고, 짧게 한 번 누르면 다음에 한 번 더 누를 때까지 들어요.</li>
+        <li>앱 안의 미리보기 화면에서는 마이크가 안 될 수 있어요. 그럴 땐 파일을 내려받아 크롬에서 열거나, 오른쪽 아래 키보드 버튼으로 글자를 입력하세요.</li>
+      </ul>
+    </fieldset>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const str = x => (typeof x === 'string' ? x.trim() : '');
+
+/* ---------- 설정과 저장 ---------- */
+const LANGS = {
+  en: { ko: '영어', name: 'English', code: 'en-US' },
+  ja: { ko: '일본어', name: '日本語', code: 'ja-JP' },
+  es: { ko: '스페인어', name: 'Español', code: 'es-ES' },
+  zh: { ko: '중국어', name: '中文', code: 'zh-CN' },
+  fr: { ko: '프랑스어', name: 'Français', code: 'fr-FR' },
+  de: { ko: '독일어', name: 'Deutsch', code: 'de-DE' }
+};
+const DEF = {
+  who: 'adult', age: 30, lang: 'en', level: '단어 몇 개 앎', likes: '', minutes: 15,
+  fname: 'Emma', persona: '차분하고 다정함', repeatAmt: '보통',
+  rate: 0.88, showKo: true, soundFirst: true, autoListen: true, voiceURI: '', micLang: 'target',
+  provider: 'gemini',
+  keys: { gemini: '', openai: '', claude: '' },
+  models: { gemini: 'gemini-2.5-flash-lite', openai: 'gpt-4o-mini', claude: 'claude-haiku-5-5' }
+};
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+};
+let S = Object.assign({}, DEF, store.get('aif.settings', {}));
+S.keys = Object.assign({}, DEF.keys, S.keys);
+S.models = Object.assign({}, DEF.models, S.models);
+const saveS = () => store.set('aif.settings', S);
+
+let log = store.get('aif.log', []);
+const saveLog = () => store.set('aif.log', log.slice(-60));
+const today = () => new Date().toLocaleDateString('sv');
+let U = store.get('aif.usage', { d: '', s: 0 });
+if (U.d !== today()) U = { d: today(), s: 0 };
+
+/* ---------- 상태 ---------- */
+let active = false, closing = false, finished = false;
+let busy = false, recording = false, speaking = false, stopping = false;
+let interim = '';
+const L = () => LANGS[S.lang] || LANGS.en;
+const hasKey = () => !!(S.keys[S.provider] || '').trim();
+const limitSec = () => Math.max(0, Math.round(S.minutes * 60));
+
+/* ---------- 프롬프트 ---------- */
+function systemPrompt() {
+  const lang = L().ko, child = S.who === 'child';
+  const amt = { '적게': '따라 말하기는 드물게(대여섯 번에 한 번쯤)', '보통': '따라 말하기는 자주(두세 번에 한 번쯤, 매번은 말고)', '많이': '따라 말하기를 많이(거의 매번)' }[S.repeatAmt] || '자주';
+  const rows = [
+    '[내 사용설명서]',
+    `- 나는: ${child ? '아이' : '성인'} · 나이: ${S.age}살`,
+    '- 모국어: 한국어',
+    `- 배울 언어: ${lang}`,
+    `- 지금 수준: ${S.level}`,
+    `- 좋아하는 것: ${S.likes || '(정하지 않음)'}`,
+    `- 하루에 쓸 시간: ${S.minutes ? S.minutes + '분' : '제한 없음'}`,
+    `- 친구 이름·성격: ${S.fname}, ${S.persona}`,
+    `- 따라 말하기: ${S.repeatAmt}`,
+    '',
+    '[대화 설정]',
+    `너는 위 사용설명서의 사람과 ${lang}로 수다 떠는 친구 ${S.fname}이야. 선생님 말고 친구처럼 말해 줘.`,
+    '1. 한 번에 한 가지 이야기만: 방금 내가 한 말에 대해서.',
+    '2. 한 번에 짧은 문장 두 개까지(한 문장에 8단어쯤). 반응하고 → 쉬운 질문 하나, 또는 따라 말할 문장 하나. 둘을 한꺼번에 하지는 마.',
+    `3. 내가 한국어로 말하면 알아듣고 ${lang}로 쉽게 대답해. 그리고 ${amt}, 내 말을 ${lang} 문장으로 바꿔서 따라 말하게 해 줘.`,
+    '4. 따라 말하게 하는 턴에는 say에 한 단어 반응만 쓰고(예: Nice!), repeat에 따라 말할 문장 하나를 넣어. 앱이 "따라 해 볼까?" 같은 한국어 신호를 직접 읽어 주니까 repeat 앞뒤에 한국어를 쓰지 마.',
+    '5. 한국어는 ko 칸에만 써(say와 repeat의 뜻). 그 칸은 내가 뜻을 볼 때만 쓰여.',
+    '6. 어떤 대답이든 괜찮아. 한 단어여도, 틀려도. 칭찬은 한 단어로. 점수·문법 설명·발음 지적은 하지 마.',
+    '7. 내 수준과 좋아하는 것에 맞춰 말해. 이야깃거리가 떨어질 때만 좋아하는 것을 꺼내.',
+    `8. 내가 ${lang}로 대답하기 시작하면 ko의 도움을 조금씩 줄여.`,
+    `9. 끝내자고 할 때는 오늘 같이 쓴 ${lang} 문장을 3개까지 recap으로 정리하고, 그중 하나를 써 보라고 해.`,
+    '10. 사람인 척하지 마. 물어보면 "언어 연습을 돕는 AI 친구"라고 해. 주소·학교·연락처·비밀번호는 묻지 마.'
+  ];
+  if (child) rows.push('아이와 이야기 중이야. 이름·학교·주소 같은 개인정보는 묻지 말고, 무섭거나 어른 이야기는 하지 마.');
+  rows.push('',
+    '[출력 형식]',
+    '반드시 JSON 객체 하나만 출력해. 다른 글자, 설명, 코드 블록은 쓰지 마.',
+    `{"say": "${lang} 문장(반응이나 질문, 짧게)", "ko": "say와 repeat의 한국어 뜻", "repeat": "따라 말할 짧은 ${lang} 문장. 없으면 빈 문자열"}`,
+    '대화를 시작하라는 신호를 받으면 네가 먼저 짧게 인사하고, 오늘 하루가 어땠는지 하나만 물어봐.');
+  return rows.join('\n');
+}
+const EXTRA = {
+  close: auto => `지금 대화를 끝낼 시간이야${auto ? ' (오늘 정한 시간이 다 됐어)' : ''}. 규칙 9대로 해 줘. say에는 짧은 마무리 인사와 "그중 하나를 써 보세요"라는 쉬운 말, ko에는 그 뜻, repeat는 빈 문자열, recap에는 오늘 우리가 같이 쓴 ${L().ko} 문장을 3개까지 배열로 넣어. JSON에 "recap" 키를 추가해.`,
+  write: () => `내가 방금 오늘 문장 중 하나를 써 봤어. 부드럽게 봐 줘. 맞으면 한 단어 칭찬만, 틀렸으면 한 단어 칭찬 뒤에 자연스럽게 고친 문장 하나만 보여 줘(문법 설명은 하지 마). 짧은 작별 인사를 덧붙여. repeat는 빈 문자열이야.`
+};
+
+/* ---------- AI 호출 ---------- */
+function toMsgs() {
+  const m = [];
+  for (const e of log) {
+    if (e.role === 'start') m.push({ role: 'user', content: '(대화 시작. 네가 먼저 짧게 인사하고, 오늘 하루가 어땠는지 하나만 물어봐.)' });
+    else if (e.role === 'me') m.push({ role: 'user', content: e.text });
+    else if (e.role === 'ai') m.push({ role: 'assistant', content: JSON.stringify({ say: e.say, ko: e.ko, repeat: e.repeat || '' }) });
+  }
+  const out = m.slice(-16);
+  while (out.length && out[0].role !== 'user') out.shift();
+  if (!out.length || out[out.length - 1].role !== 'user') out.push({ role: 'user', content: '(이제 마무리해 줘)' });
+  return out;
+}
+function parseReply(t) {
+  t = (t || '').trim();
+  const m = t.match(/\{[\s\S]*\}/);
+  if (m) { try { const o = JSON.parse(m[0]); if (o && typeof o === 'object') return o; } catch (e) {} }
+  if (!t) throw new Error('AI가 빈 답을 보냈어요. 다시 해 볼까요?');
+  return { say: t.replace(/```(?:json)?/g, '').trim(), ko: '', repeat: '' };
+}
+async function callLLM(msgs, extra) {
+  const sys = systemPrompt() + (extra ? '\n\n[지금 해야 할 일]\n' + extra : '');
+  const p = S.provider, key = (S.keys[p] || '').trim();
+  const model = (S.models[p] || '').trim() || DEF.models[p];
+  let url, headers, body, pick;
+  if (p === 'gemini') {
+    url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) + ':generateContent';
+    headers = { 'Content-Type': 'application/json', 'x-goog-api-key': key };
+    body = {
+      systemInstruction: { parts: [{ text: sys }] },
+      contents: msgs.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+      generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 1000 }
+    };
+    pick = j => ((j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || []).map(x => x.text || '').join('');
+  } else if (p === 'openai') {
+    url = 'https://api.openai.com/v1/chat/completions';
+    headers = { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key };
+    body = { model, messages: [{ role: 'system', content: sys }].concat(msgs), response_format: { type: 'json_object' } };
+    pick = j => (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '';
+  } else {
+    url = 'https://api.anthropic.com/v1/messages';
+    headers = { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+    body = { model, max_tokens: 700, system: sys, messages: msgs };
+    pick = j => (j.content || []).map(c => c.text || '').join('');
+  }
+  const ctl = new AbortController();
+  const to = setTimeout(() => ctl.abort(), 30000);
+  let res;
+  try { res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal }); }
+  finally { clearTimeout(to); }
+  const raw = await res.text();
+  let j = null; try { j = JSON.parse(raw); } catch (e) {}
+  if (!res.ok) {
+    const err = new Error((j && j.error && j.error.message) || raw.slice(0, 200) || ('HTTP ' + res.status));
+    err.status = res.status; throw err;
+  }
+  return parseReply(pick(j || {}));
+}
+function errMsg(err) {
+  if (err.name === 'AbortError') return 'AI 답이 너무 늦어요. 잠시 뒤에 다시 해 보세요.';
+  if (err.status === 401 || err.status === 403) return 'API 키를 확인해 주세요. (오류 ' + err.status + ')';
+  if (err.status === 400 || err.status === 404) return 'API 키나 모델 이름을 확인해 주세요. (오류 ' + err.status + ')';
+  if (err.status === 429) return '요청이 많아요. 잠시 쉬었다가 다시 해 보세요.';
+  if (err instanceof TypeError) return '인터넷에 연결되지 않았어요. 연결을 확인해 주세요.';
+  return err.message || '알 수 없는 오류가 났어요.';
+}
+
+/* ---------- 연습 모드(키 없이, 영어만) ---------- */
+const DEMO = [
+  { say: "Hi! I'm {n}. How are you today?", ko: '안녕! 나는 {n}야. 오늘 어때?', repeat: '' },
+  { say: 'Nice!', ko: '좋아요! "나는 오늘 그저 그래요."', repeat: "I'm so-so today." },
+  { say: 'Good!', ko: '좋아요! "나는 조금 피곤해요."', repeat: "I'm a little tired." },
+  { say: 'What did you eat today?', ko: '오늘 뭐 먹었어요?', repeat: '' },
+  { say: 'Yum!', ko: '맛있겠다! "나는 밥과 국을 먹었어요."', repeat: 'I had rice and soup.' },
+  { say: 'Great!', ko: '좋아요! "정말 맛있었어요."', repeat: 'It was really good.' },
+  { say: 'Do you like coffee?', ko: '커피 좋아해요?', repeat: '' },
+  { say: 'Cool!', ko: '멋져요! "나는 차를 더 좋아해요."', repeat: 'I like tea more.' },
+  { say: 'Nice!', ko: '좋아요! "주말에는 쉬고 싶어요."', repeat: 'I want to rest this weekend.' },
+  { say: 'Good talk! What do you want to say next?', ko: '좋은 대화였어요! 다음엔 무슨 말을 하고 싶어요?', repeat: '' }
+];
+let demoIdx = 0;
+function demoNext(mode) {
+  if (mode === 'close') {
+    const rep = DEMO.slice(0, demoIdx).map(d => d.repeat).filter(Boolean).slice(-3);
+    return { say: 'Great job today! Pick one and write it.', ko: '오늘 수고했어요! 하나 골라서 써 봐요.', repeat: '', recap: rep.length ? rep : ["I'm so-so today."] };
+  }
+  if (mode === 'write') return { say: 'Nice! See you soon.', ko: '좋아요! 또 만나요.', repeat: '' };
+  const d = DEMO[Math.min(demoIdx, DEMO.length - 1)]; demoIdx++;
+  return { say: d.say.replace('{n}', S.fname), ko: d.ko.replace('{n}', S.fname), repeat: d.repeat };
+}
+
+/* ---------- 말하기(목소리) ---------- */
+let voices = [];
+const synthOK = 'speechSynthesis' in window;
+function loadVoices() { if (!synthOK) return; voices = speechSynthesis.getVoices() || []; fillVoices(); }
+if (synthOK) { speechSynthesis.onvoiceschanged = loadVoices; loadVoices(); }
+function pickVoice(lang) {
+  const base = lang.slice(0, 2).toLowerCase();
+  if (S.voiceURI && base === L().code.slice(0, 2)) {
+    const chosen = voices.find(v => v.voiceURI === S.voiceURI);
+    if (chosen) return chosen;
+  }
+  const c = voices.filter(v => v.lang.replace('_', '-').toLowerCase().startsWith(base));
+  const score = v => (v.lang.replace('_', '-').toLowerCase() === lang.toLowerCase() ? 4 : 0) + (/natural|neural|online|premium|enhanced/i.test(v.name) ? 3 : 0) + (/google/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1);
+  c.sort((a, b) => score(b) - score(a));
+  return c[0] || null;
+}
+let spkToken = 0;
+function stopSpeech() { spkToken++; speaking = false; try { if (synthOK) speechSynthesis.cancel(); } catch (e) {} paint(); }
+function speakOne(p) {
+  return new Promise(res => {
+    if (!synthOK) { res(); return; }
+    const u = new SpeechSynthesisUtterance(p.t);
+    u.lang = p.lang; u.rate = p.rate;
+    const v = pickVoice(p.lang); if (v) u.voice = v;
+    let done = false, t;
+    const fin = () => { if (done) return; done = true; clearTimeout(t); res(); };
+    u.onend = fin; u.onerror = fin;
+    t = setTimeout(fin, Math.max(4000, p.t.length * 240 / p.rate));
+    speechSynthesis.speak(u);
+  });
+}
+async function speakSeq(parts) {
+  if (!synthOK || !parts.length) return;
+  const my = ++spkToken;
+  try { speechSynthesis.cancel(); speechSynthesis.resume(); } catch (e) {}
+  speaking = true; paint();
+  await sleep(60);
+  for (const p of parts) { if (my !== spkToken) return; await speakOne(p); }
+  if (my === spkToken) { speaking = false; paint(); }
+}
+const CUES = ['따라 해 볼까?', '이렇게 말해 볼래?'];
+function partsFor(e) {
+  const p = [];
+  if (e.say) p.push({ t: e.say, lang: L().code, rate: S.rate });
+  if (e.repeat) {
+    p.push({ t: CUES[Math.floor(Math.random() * CUES.length)], lang: 'ko-KR', rate: 1 });
+    p.push({ t: e.repeat, lang: L().code, rate: Math.max(0.6, S.rate * 0.95) });
+  }
+  return p;
+}
+function unlockAudio() { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} }
+
+/* ---------- 화면 그리기 ---------- */
+const logEl = $('log'), faceEl = $('face'), micEl = $('mic'), intro = $('intro');
+let tt;
+function toast(msg, ms) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(tt); tt = setTimeout(() => { t.hidden = true; }, ms || 5000); }
+const icoPlay = () => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.innerHTML = '<path d="M11 5 6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>'; return s; };
+function replayBtn(getParts, label) {
+  const b = el('button', 'replay'); b.type = 'button'; b.setAttribute('aria-label', label || '다시 듣기');
+  b.append(icoPlay(), document.createTextNode(label === '' ? '' : (label || '다시 듣기')));
+  b.addEventListener('click', e => { e.stopPropagation(); if (recording) return; speakSeq(getParts()); });
+  return b;
+}
+function meNode(e) {
+  const m = el('div', 'msg me'); const b = el('div', 'bubble'); b.append(el('p', 'say', e.text)); b.firstChild.style.fontSize = '1.05rem'; m.append(b); return m;
+}
+function aiNode(e, veil, isLastAi) {
+  const m = el('div', 'msg ai' + (veil ? ' veiled' : ''));
+  const b = el('div', 'bubble');
+  if (e.say) b.append(el('p', 'say', e.say));
+  if (e.repeat) { const r = el('div', 'rep'); r.append(el('span', 'rep-label', '따라 해 보세요'), el('p', 'rep-text', e.repeat)); b.append(r); }
+  if (Array.isArray(e.recap)) {
+    if (e.recap.length) {
+      const ul = el('ul', 'recap');
+      e.recap.forEach(s => { const li = el('li'); li.append(el('span', 'rc', s), replayBtn(() => [{ t: s, lang: L().code, rate: S.rate }], '')); ul.append(li); });
+      b.append(ul);
+    }
+    if (!e.written && isLastAi && !finished) {
+      const w = el('div', 'write');
+      const ta = el('textarea'); ta.rows = 2; ta.placeholder = '오늘 나온 문장 중 하나를 써 보세요'; ta.setAttribute('aria-label', '오늘 나온 문장 써 보기');
+      ta.autocapitalize = 'off';
+      const go = el('button', 'btn small', '보내기'); go.type = 'button';
+      go.addEventListener('click', () => { const t = ta.value.trim(); if (t) submitWriting(e, t); else ta.focus(); });
+      w.append(ta, go); b.append(w);
+    }
+  }
+  if (e.ko && S.showKo) b.append(el('p', 'ko', e.ko));
+  b.addEventListener('click', () => m.classList.remove('veiled'));
+  m.append(b);
+  if (e.say || e.repeat) m.append(replayBtn(() => partsFor(e)));
+  return m;
+}
+function renderLog(veilLast) {
+  logEl.replaceChildren();
+  let lastAi = -1; log.forEach((e, i) => { if (e.role === 'ai') lastAi = i; });
+  log.forEach((e, i) => {
+    if (e.role === 'me') logEl.append(meNode(e));
+    else if (e.role === 'ai') logEl.append(aiNode(e, veilLast && i === lastAi, i === lastAi));
+  });
+  if (finished) {
+    const n = el('div', 'msg notice'); const b = el('div', 'bubble'); b.append(el('p', null, '오늘 연습은 여기까지예요. 수고했어요!'));
+    const r = el('button', 'btn small', '새 대화 시작하기'); r.type = 'button'; r.style.marginTop = '8px';
+    r.addEventListener('click', () => { log = []; saveLog(); finished = false; closing = false; active = false; demoIdx = 0; renderLog(); paintIntro(); intro.hidden = false; paint(); });
+    b.append(r); n.append(b); logEl.append(n);
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function unveil() { logEl.querySelectorAll('.veiled').forEach(n => n.classList.remove('veiled')); logEl.scrollTop = logEl.scrollHeight; }
+
+function paint() {
+  const listening = recording && !stopping;
+  const st = listening ? 'listening' : (busy || stopping) ? 'thinking' : speaking ? 'talking' : 'idle';
+  faceEl.setAttribute('class', 'face ' + st);
+  micEl.classList.toggle('rec', listening);
+  micEl.setAttribute('aria-pressed', listening ? 'true' : 'false');
+  micEl.disabled = !active || busy || closing;
+  let s = '';
+  if (!active) s = '';
+  else if (stopping) s = interim || '인식하는 중…';
+  else if (recording) s = interim || '듣고 있어요…';
+  else if (busy) s = '생각 중…';
+  else if (speaking) s = '말하는 중… (마이크를 누르면 멈춰요)';
+  else if (closing) s = '오늘 연습을 마무리하고 있어요';
+  else s = '마이크를 누르고 말해 보세요';
+  $('status').textContent = s;
+  $('kbBtn').disabled = !active || closing;
+}
+function paintTimer() {
+  const lim = limitSec();
+  if (!lim) { $('timer').textContent = '시간 제한 없음'; return; }
+  const r = Math.max(0, lim - U.s);
+  $('timer').textContent = String(Math.floor(r / 60)).padStart(2, '0') + ':' + String(r % 60).padStart(2, '0');
+}
+function paintHead() {
+  $('ttlName').textContent = S.fname || 'AI 친구';
+  $('ttlSub').textContent = L().ko + ' 연습을 돕는 AI 친구';
+  $('langBtn').textContent = '말하기: ' + (S.micLang === 'ko' ? '한국어' : L().name);
+}
+function hasConv() {
+  const last = [...log].reverse().find(e => e.role === 'ai' || e.role === 'me');
+  return !!last && !(last.recap || last.final);
+}
+function paintIntro() {
+  $('introTitle').textContent = '안녕! 나는 ' + (S.fname || 'AI 친구') + '야';
+  $('introSub').textContent = L().ko + ' 연습 · ' + (S.minutes ? '하루 ' + S.minutes + '분' : '시간 제한 없음') + ' · ' + (S.soundFirst ? '소리 먼저, 글자는 뒤에' : '글자와 소리 함께');
+  $('introKey').textContent = hasKey() ? '대화 AI: ' + ({ gemini: 'Gemini', openai: 'OpenAI', claude: 'Claude' }[S.provider]) : 'API 키가 없어서 연습 모드로 시작해요. 정해진 영어 문장을 따라 말해 볼 수 있어요. 진짜 대화는 설정에 키를 넣으면 돼요.';
+  $('startBtn').textContent = hasConv() ? '이어서 하기' : '시작하기';
+}
+
+/* ---------- 대화 흐름 ---------- */
+async function aiTurn(mode) {
+  mode = mode || '';
+  busy = true; paint();
+  let r;
+  try {
+    if (hasKey()) r = await callLLM(toMsgs(), EXTRA[mode] ? EXTRA[mode](mode === 'close' && closing === 'auto') : '');
+    else { await sleep(400); r = demoNext(mode); }
+  } catch (err) {
+    busy = false; paint(); failTurn(err, mode); return;
+  }
+  busy = false;
+  const e = { role: 'ai', say: str(r.say), ko: str(r.ko), repeat: str(r.repeat) };
+  if (mode === 'close') e.recap = (Array.isArray(r.recap) ? r.recap : []).map(str).filter(Boolean).slice(0, 3);
+  if (mode === 'write') { e.final = true; finished = true; $('endBtn').hidden = true; }
+  if (!e.say && !e.repeat) { toast('AI가 빈 답을 보냈어요. 다시 말해 볼까요?'); paint(); return; }
+  log.push(e); saveLog();
+  const veil = S.soundFirst && synthOK;
+  renderLog(veil); paint();
+  await speakSeq(partsFor(e));
+  unveil(); paint();
+  if (!mode) maybeAutoListen();
+}
+function failTurn(err, mode) {
+  toast(errMsg(err), 8000);
+  if (mode === 'close') closing = false;
+  const last = log[log.length - 1];
+  if (last && last.role === 'start') { log = []; saveLog(); active = false; $('endBtn').hidden = true; intro.hidden = false; paintIntro(); }
+  paint();
+}
+async function handleUser(text) {
+  text = text.trim(); if (!text || busy || closing || !active) return;
+  log.push({ role: 'me', text }); saveLog(); renderLog(); paint();
+  await aiTurn();
+}
+async function endSession(auto) {
+  if (closing || !active || finished) return;
+  if (!log.some(e => e.role === 'me')) { toast('아직 대화를 하지 않았어요. 한마디 해 본 뒤에 마칠 수 있어요.'); return; }
+  closing = auto ? 'auto' : true;
+  stopRec(); stopSpeech(); paint();
+  await aiTurn('close');
+}
+async function submitWriting(entry, text) {
+  entry.written = true; log.push({ role: 'me', text, written: true }); saveLog(); renderLog(); paint();
+  await aiTurn('write');
+  renderLog();
+}
+function startConv() {
+  if (limitSec() && U.s >= limitSec()) { toast('오늘 정한 시간을 다 썼어요. 설정에서 하루 시간을 늘릴 수 있어요.', 7000); return; }
+  if (!hasKey() && S.lang !== 'en') { toast('키 없이 하는 연습 모드는 영어만 돼요. 설정에서 API 키를 넣어 주세요.', 7000); openSheet(); return; }
+  unlockAudio(); askMic();
+  intro.hidden = true; active = true; closing = false; finished = false; $('endBtn').hidden = false;
+  if (!hasConv()) { log = [{ role: 'start' }]; demoIdx = 0; saveLog(); renderLog(); paint(); aiTurn(); }
+  else { renderLog(); paint(); }
+}
+
+/* ---------- 듣기(내 말 → 글자) ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, recId = 0, recErr = '', lastText = '', downAt = 0, ignoreUp = false, started = false;
+let startTimer = 0, stopTimer = 0;
+const START_WAIT = 6000, STOP_WAIT = 2000;
+
+/* 듣기를 끝내는 곳은 여기 한 곳뿐이다. onend가 오지 않는 화면(앱 안 미리보기 등)에서도 타이머가 대신 불러서 꼭 꺼진다. */
+function finishRec(id) {
+  if (id !== recId || !rec) return;
+  clearTimeout(startTimer); clearTimeout(stopTimer);
+  const r = rec, t = lastText.trim(), err = recErr;
+  rec = null; recording = false; stopping = false; interim = '';
+  r.onstart = r.onaudiostart = r.onspeechstart = r.onresult = r.onerror = r.onend = null;
+  try { r.abort(); } catch (e) {}
+  paint();
+  const auto = autoStarted; autoStarted = false;
+  if (closing) return;
+  if (t) { emptyTries = 0; handleUser(t); return; }
+  if (err === 'no-speech' || !err) {
+    emptyTries++;
+    if (auto && emptyTries < 2) maybeAutoListen();
+    else toast(auto ? '마이크 버튼을 눌러서 이어서 말해 보세요.' : '소리가 안 들렸어요. 다시 한 번 말해 볼까요?');
+    return;
+  }
+  if (err === 'aborted') return;
+  emptyTries = 9;   // 오류가 났으면 자동으로 다시 켜지 않는다
+  if (err === 'service-not-allowed') toast('음성 인식 서비스를 쓸 수 없어요 [service-not-allowed]. 폰 설정 → 앱 → Google(또는 음성 입력)에서 마이크 권한을 허용하고 음성 인식이 켜져 있는지 확인해 주세요.', 15000);
+  else if (err === 'not-allowed') micHelp('NotAllowedError', '음성인식');
+  else if (err === 'no-start') toast('이 화면에서는 마이크가 반응하지 않아요. 파일을 내려받아 크롬에서 열거나, 키보드 버튼으로 글자를 입력해 주세요.', 9000);
+  else if (err === 'network') toast('음성 인식 서버에 연결하지 못했어요. 인터넷을 확인하거나 글자로 입력해 주세요.', 8000);
+  else if (err === 'audio-capture') toast('마이크를 찾지 못했어요. 마이크가 연결되어 있는지 확인해 주세요.', 8000);
+  else if (err === 'language-not-supported') toast('이 브라우저는 이 언어의 음성 인식을 지원하지 않아요. 아래 왼쪽 버튼으로 말하기 언어를 바꿔 보세요.', 8000);
+  else toast('음성 인식 오류 [' + err + ']', 8000);
+}
+function startRec() {
+  if (!SR) { toast('이 브라우저는 음성 인식을 지원하지 않아요. 크롬이나 엣지에서 열어 주세요. 글자로 입력할 수도 있어요.', 7000); return; }
+  if (busy || recording || !active || closing) return;
+  stopSpeech();
+  const id = ++recId;
+  let r;
+  try { r = new SR(); } catch (e) { toast('음성 인식을 시작하지 못했어요. 글자로 입력해 주세요.', 7000); return; }
+  r.lang = S.micLang === 'ko' ? 'ko-KR' : L().code;
+  r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+  recErr = ''; lastText = ''; interim = ''; started = false; stopping = false;
+  const go = () => { if (id === recId) started = true; };
+  r.onstart = r.onaudiostart = r.onspeechstart = go;
+  r.onresult = ev => {
+    if (id !== recId) return;
+    started = true;
+    let t = ''; for (let i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript;
+    lastText = t; interim = t; paint();
+  };
+  r.onerror = ev => { if (id === recId) { started = true; recErr = ev.error || 'error'; } };
+  r.onend = () => finishRec(id);
+  rec = r;
+  try { r.start(); } catch (e) { rec = null; recording = false; paint(); toast('음성 인식을 시작하지 못했어요. 잠시 뒤에 다시 눌러 보세요.'); return; }
+  recording = true; paint();
+  clearTimeout(startTimer);
+  startTimer = setTimeout(() => { if (id === recId && rec && !started) { recErr = 'no-start'; finishRec(id); } }, START_WAIT);
+}
+function stopRec() {
+  if (!rec || stopping) return;
+  const id = recId;
+  stopping = true; paint();
+  try { rec.stop(); } catch (e) {}
+  clearTimeout(stopTimer);
+  stopTimer = setTimeout(() => finishRec(id), STOP_WAIT);
+}
+/* 마이크 권한: 시작 버튼을 누르는 순간 브라우저의 허용창을 자동으로 띄운다 */
+let micState = 'unknown', micPending = null, autoStarted = false, emptyTries = 0;
+function ensureMic() {
+  const md = navigator.mediaDevices;
+  if (!md || !md.getUserMedia) return Promise.resolve('unsupported');
+  return md.getUserMedia({ audio: true })
+    .then(s => { s.getTracks().forEach(t => t.stop()); return 'ok'; })
+    .catch(e => (e && e.name) || 'error');
+}
+function askMic() {
+  if (micState === 'ok') return Promise.resolve('ok');
+  if (micPending) return micPending;
+  micPending = ensureMic().then(r => {
+    micPending = null; micState = r;
+    if (r !== 'ok' && r !== 'unsupported') micHelp(r);
+    return r;
+  });
+  return micPending;
+}
+function micHelp(name, via) {
+  const embedded = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+  let m;
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    m = location.protocol === 'content:'
+      ? '파일 앱·다운로드 목록에서 바로 연 페이지는 크롬이 마이크를 허용하지 않아요. 크롬 주소창에 file:///sdcard/Download/ai-friend.html 을 입력해 열거나, 인터넷 주소(https) 링크로 열어 주세요.'
+      : embedded
+      ? '이 화면은 다른 페이지 안에 들어 있어서 마이크를 쓸 수 없어요. 크롬에서 파일을 직접 열어 주세요. 그동안은 키보드 버튼으로 글자를 입력할 수 있어요.'
+      : '마이크가 막혀 있어요. ① 카카오톡·파일 앱 안의 미리보기가 아니라 크롬 앱에서 열었는지 ② 폰 설정 → 앱 → Chrome → 권한 → 마이크가 허용인지 ③ 크롬 ⋮ → 설정 → 사이트 설정 → 마이크가 차단이 아닌지 확인해 주세요.';
+  } else if (name === 'NotFoundError') m = '마이크를 찾지 못했어요. 기기에 마이크가 있는지 확인해 주세요.';
+  else if (name === 'NotReadableError') m = '다른 앱이 마이크를 쓰고 있어요. 그 앱을 닫고 다시 눌러 주세요.';
+  else m = '마이크를 켜지 못했어요. 글자 입력 버튼을 써 주세요.';
+  m += ' [' + (via || '마이크') + ':' + name + ' · ' + location.protocol + ']';
+  toast(m, 15000);
+}
+function beginListen() {
+  autoStarted = false; emptyTries = 0;
+  if (micState === 'ok' || micState === 'unsupported') startRec();
+  else askMic().then(r => { if (r === 'ok' || r === 'unsupported') startRec(); });
+}
+/* AI 말이 끝나면 마이크를 저절로 켠다. 아무 말도 없으면 두 번까지만 다시 켠다. */
+function maybeAutoListen() {
+  if (!S.autoListen || !SR || emptyTries >= 2) return;
+  if (micPending) { micPending.then(() => maybeAutoListen()); return; }
+  if (micState !== 'ok' && micState !== 'unsupported') return;
+  setTimeout(() => {
+    if (!S.autoListen || !active || closing || finished || busy || recording || stopping || speaking || document.hidden) return;
+    if (!sheet.hidden || !$('textRow').hidden) return;
+    autoStarted = true; startRec();
+  }, 500);
+}
+/* 누르고 있는 동안 듣고, 짧게 한 번 누르면 계속 듣는다. 듣는 중에 누르면 언제나 끈다. */
+micEl.addEventListener('pointerdown', e => {
+  if (e.button > 0) return;
+  e.preventDefault();
+  if (recording) { ignoreUp = true; stopRec(); return; }
+  downAt = Date.now(); ignoreUp = false;
+  try { micEl.setPointerCapture(e.pointerId); } catch (x) {}
+  beginListen();
+});
+micEl.addEventListener('pointerup', () => {
+  if (ignoreUp) { ignoreUp = false; return; }
+  if (recording && Date.now() - downAt >= 350) stopRec();
+});
+micEl.addEventListener('pointercancel', () => { if (recording && !ignoreUp && Date.now() - downAt >= 350) stopRec(); });
+micEl.addEventListener('contextmenu', e => e.preventDefault());
+micEl.addEventListener('click', e => { if (e.detail === 0) { if (recording) stopRec(); else beginListen(); } });
+
+/* ---------- 설정 창 ---------- */
+const sheet = $('sheet');
+function fillVoices() {
+  const sel = $('voiceSel'); if (!sel) return;
+  const base = L().code.slice(0, 2).toLowerCase();
+  sel.replaceChildren();
+  const a = el('option', null, '자동 (가장 자연스러운 목소리)'); a.value = ''; sel.append(a);
+  voices.filter(v => v.lang.toLowerCase().startsWith(base)).forEach(v => { const o = el('option', null, v.name + ' (' + v.lang + ')'); o.value = v.voiceURI; sel.append(o); });
+  sel.value = S.voiceURI; if (sel.value !== S.voiceURI) { sel.value = ''; }
+}
+function syncProvider() { $('modelIn').value = S.models[S.provider] || ''; $('keyIn').value = S.keys[S.provider] || ''; }
+function bindSheet() {
+  sheet.querySelectorAll('[data-k]').forEach(c => {
+    const k = c.dataset.k;
+    if (c.type === 'radio') c.checked = String(S[k]) === c.value;
+    else if (c.type === 'checkbox') c.checked = !!S[k];
+    else c.value = S[k];
+    c.addEventListener(c.type === 'range' || c.type === 'text' || c.type === 'number' ? 'input' : 'change', () => {
+      let v;
+      if (c.type === 'radio') { if (!c.checked) return; v = c.value; }
+      else if (c.type === 'checkbox') v = c.checked;
+      else if (c.type === 'range') v = parseFloat(c.value);
+      else if (c.type === 'number') { v = parseInt(c.value, 10); if (isNaN(v)) return; v = Math.min(+c.max, Math.max(+c.min, v)); }
+      else v = c.value;
+      S[k] = v; saveS(); onSetting(k);
+    });
+  });
+  $('modelIn').addEventListener('input', e => { S.models[S.provider] = e.target.value; saveS(); });
+  $('keyIn').addEventListener('input', e => { S.keys[S.provider] = e.target.value; saveS(); paintIntro(); });
+  $('voiceSel').addEventListener('change', e => { S.voiceURI = e.target.value; saveS(); });
+  syncProvider(); fillVoices(); $('rateOut').textContent = (+S.rate).toFixed(2);
+}
+function onSetting(k) {
+  if (k === 'provider') syncProvider();
+  if (k === 'lang') { S.voiceURI = ''; saveS(); fillVoices(); }
+  if (k === 'rate') $('rateOut').textContent = (+S.rate).toFixed(2);
+  if (k === 'showKo') renderLog();
+  paintHead(); paintTimer(); paintIntro();
+}
+function openSheet() { sheet.hidden = false; document.body.style.overflow = 'hidden'; sheet.scrollTop = 0; }
+function closeSheet() { sheet.hidden = true; document.body.style.overflow = ''; paintHead(); paintTimer(); paintIntro(); paint(); }
+
+/* ---------- 이벤트 연결 ---------- */
+$('gearBtn').addEventListener('click', openSheet);
+$('introSet').addEventListener('click', openSheet);
+$('sheetClose').addEventListener('click', closeSheet);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheet.hidden) closeSheet(); });
+$('startBtn').addEventListener('click', startConv);
+$('endBtn').addEventListener('click', () => endSession(false));
+$('langBtn').addEventListener('click', () => { if (recording) return; S.micLang = S.micLang === 'ko' ? 'target' : 'ko'; saveS(); paintHead(); });
+$('kbBtn').addEventListener('click', () => { const r = $('textRow'); r.hidden = !r.hidden; if (!r.hidden) $('textIn').focus(); });
+$('textRow').addEventListener('submit', e => { e.preventDefault(); const t = $('textIn').value; $('textIn').value = ''; stopSpeech(); handleUser(t); });
+$('clearBtn').addEventListener('click', () => {
+  const b = $('clearBtn');
+  if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = '정말 지울까요? 한 번 더 누르면 지워져요'; setTimeout(() => { b.dataset.sure = ''; b.textContent = '대화 기록 지우기'; }, 4000); return; }
+  b.dataset.sure = ''; b.textContent = '대화 기록 지우기';
+  stopSpeech(); log = []; saveLog(); active = false; closing = false; finished = false; demoIdx = 0;
+  $('endBtn').hidden = true; renderLog(); paintIntro(); intro.hidden = false; paint(); toast('대화 기록을 지웠어요.');
+});
+window.addEventListener('pagehide', () => { store.set('aif.usage', U); });
+
+/* 하루 시간 재기: 대화 중이고 화면이 보일 때만 센다 */
+setInterval(() => {
+  if (U.d !== today()) U = { d: today(), s: 0 };
+  if (active && !closing && !finished && !document.hidden) {
+    U.s++;
+    if (U.s % 5 === 0) store.set('aif.usage', U);
+    if (limitSec() && U.s >= limitSec() && !busy) endSession(true);
+  }
+  paintTimer();
+}, 1000);
+
+/* ---------- 시작 ---------- */
+bindSheet(); paintHead(); paintTimer(); paintIntro(); renderLog(); paint();
+</script>
+</body>
+</html>
